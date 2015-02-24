@@ -1,40 +1,54 @@
+local actors = { mt = {} }
 local lanes = require "lanes".configure()
-local luaproc = require "luaproc"
 
-local actors = {
-  mt = {}
-}
-
-actors.timeout = 5
-
+local ACTOR_MESSAGE = true
 local STOP = -1
+local GET_STATE = -2
 
-function actors.mt.send(to, msg_type, ...)
-  luaproc.send(to.channel, msg_type, arg)
+local sender = nil
+
+function actors.mt.send(to, body)
+  to.linda:send(ACTOR_MESSAGE, { body = body, from = sender })
 end
 
 function actors.mt.stop(to)
   to:send(STOP)
 end
 
-local function process(channel_name, receive, state)
+function actors.mt.get_state(from)
+  to:send(GET_STATE)
+end
+
+local function process(self, linda, receive, state)
+  sender = sender or self
   while true do
-    local msg = luaproc.receive(channel_name)
+    local key, msg = linda:receive(ACTOR_MESSAGE, 5)    
     if msg == nil or msg == STOP then
       break
+    elseif msg == GET_STATE then
+      local sender = msg.sender
+      if sender ~= nil then
+        sender:send(state)
+      else
+        -- Somehow return state to the 'main' lane?
+      end
     else
       receive(state, msg)
     end
   end
+  return state
 end
 
 function actors.new(receive, state)
   state = state or {}
-  local proc, err = luaproc.newproc()
-  local chan, err = luaproc.newchannel(tostring("actor-" .. proc))
+  local linda = lanes.linda()
+  local lane = lanes.gen("*", process)
 
-  local actor = { channel = chan, proc = proc }
+  local actor = {}
   setmetatable(actor, { __index = actors.mt })
+  
+  actor.linda = linda
+  lane(actor, linda, receive, state)
 
   return actor
 end
