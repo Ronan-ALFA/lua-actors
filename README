@@ -1,0 +1,3 @@
+A simple actor library for Lua, based on LuaLanes. Currently experimental.
+
+A fixed number of threads is created, with actors randomly assigned for them. The normal thread pool solution won't work in LuaLanes without sending state and libraries through Lindas, which is a lot of unnecissary (de)serialization.
