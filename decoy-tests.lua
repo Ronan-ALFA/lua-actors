@@ -26,8 +26,6 @@ describe("decoys",function()
     decoy.hex = { a = 0x00 }
     assert.are.same(decoy, result)
   end)
-  it("should remove keys", function()
-  end)
   it("should not modify the original table", function()
     rollback = decoys.original(decoy)
     assert.are.equal(orig, rollback)

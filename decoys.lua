@@ -1,7 +1,7 @@
 local Decoys = {}
 
 local datas = {}
-local weak = { __mode = "kv" }
+local weak = { __mode = "k" }
 setmetatable(datas, weak)
 
 local function is_decoy(table)
