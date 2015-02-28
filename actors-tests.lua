@@ -18,8 +18,8 @@ describe("actors", function()
       from:tell(state.count)
     end
     -- The actor is randomly assigned to one of the system's threads.
-    actor1 = system.new(counter)
-    actor2 = system.new(counter)
+    actor1 = system.actor(counter)
+    actor2 = system.actor(counter)
   end)
   it("receive messages", function()
     local msg = "Test!"

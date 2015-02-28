@@ -1,4 +1,4 @@
-local actors = { mt = {} }
+local Actors = { mt = {} }
 local lanes = require "lanes".configure()
 local actor_mt = { __index = mt }
 local MESSAGE_KEY = true
@@ -7,13 +7,13 @@ local lindas = {}
 local acting
 
 local top_level_actor = { id = 0, linda = lanes.linda() }
-setmetatable(top_level_actor, { __index = actors.mt })
+setmetatable(top_level_actor, { __index = Actors.mt })
 
-function actors.mt.tell(to, msg)
+function Actors.mt.tell(to, msg)
   to.linda:send(MESSAGE_KEY, { body = msg, to = to.id, from = acting or top_level_actor })
 end
 
-function actors.mt.ask(to, msg, timeout)
+function Actors.mt.ask(to, msg, timeout)
   local from = acting or top_level_actor
   to:tell(msg)
   local key, reply = top_level_actor.linda:receive(timeout, MESSAGE_KEY)
@@ -23,7 +23,7 @@ function actors.mt.ask(to, msg, timeout)
   return nil
 end
 
-function actors.system(num_threads, libs)
+function Actors.system(num_threads, libs)
   local system = {}
   local num_actors = 0
   local actor_lanes = {}
@@ -31,7 +31,7 @@ function actors.system(num_threads, libs)
   local function process(linda)
     local actor_states = {}
     while true do
-      key, msg = linda:receive(50, ADD_ACTOR_KEY, MESSAGE_KEY)
+      key, msg = linda:receive(1, ADD_ACTOR_KEY, MESSAGE_KEY)
       if key == ADD_ACTOR_KEY then
         actor_states[msg.id] = { state = msg.state, receive = msg.receive }
       elseif key == MESSAGE_KEY then
@@ -45,7 +45,7 @@ function actors.system(num_threads, libs)
     end
   end
 
-  function system.new(receive, state)
+  function system.actor(receive, state)
     num_actors = num_actors + 1
     local linda = lindas[math.random(#lindas)]
     local actor = {
@@ -53,8 +53,17 @@ function actors.system(num_threads, libs)
       linda = linda
     }
     linda:send(ADD_ACTOR_KEY, { id = num_actors, state = state or {}, receive = receive })
-    setmetatable(actor, { __index = actors.mt })
+    setmetatable(actor, { __index = Actors.mt })
     return actor
+  end
+
+  function system.robust_actor(receive, state, on_err)
+    system.actor(function(state, body, from)
+      local success, err = pcall(receive)
+      if not success then
+        on_err(state, body, from, err)
+      end
+    end)
   end
 
   libs = libs or "*"
@@ -69,4 +78,4 @@ function actors.system(num_threads, libs)
   return system
 end
 
-return actors
+return Actors
