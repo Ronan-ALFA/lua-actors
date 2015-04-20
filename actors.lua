@@ -3,18 +3,17 @@ local lanes = require "lanes".configure()
 local actor_mt = { __index = mt }
 local MESSAGE_KEY = true
 local ADD_ACTOR_KEY = false
-local lindas = {}
-local acting
+local current_actor
 
 local top_level_actor = { id = 0, linda = lanes.linda() }
 setmetatable(top_level_actor, { __index = Actors.mt })
 
 function Actors.mt.tell(to, msg)
-  to.linda:send(MESSAGE_KEY, { body = msg, to = to.id, from = acting or top_level_actor })
+  to.linda:send(MESSAGE_KEY, { body = msg, to = to.id, from = current_actor or top_level_actor })
 end
 
 function Actors.mt.ask(to, msg, timeout)
-  local from = acting or top_level_actor
+  local from = current_actor or top_level_actor
   to:tell(msg)
   local key, reply = top_level_actor.linda:receive(timeout, MESSAGE_KEY)
   if reply then
@@ -27,6 +26,8 @@ function Actors.system(num_threads, libs)
   local system = {}
   local num_actors = 0
   local actor_lanes = {}
+  local lindas = {}
+  local pingers = {}
 
   local function process(linda)
     local actor_states = {}
@@ -37,17 +38,16 @@ function Actors.system(num_threads, libs)
       elseif key == MESSAGE_KEY then
         local dest = actor_states[msg.to]        
         if dest ~= nil then
-          acting = dest
+          current_actor = dest
           dest.receive(dest.state, msg.body, msg.from)
-          acting = nil
+          current_actor = nil
         end
       end
     end
   end
 
-  function system.actor(receive, state)
+  local function new_actor(receive, state, linda)
     num_actors = num_actors + 1
-    local linda = lindas[math.random(#lindas)]
     local actor = {
       id = num_actors,
       linda = linda
@@ -55,6 +55,10 @@ function Actors.system(num_threads, libs)
     linda:send(ADD_ACTOR_KEY, { id = num_actors, state = state or {}, receive = receive })
     setmetatable(actor, { __index = Actors.mt })
     return actor
+  end
+
+  function system.actor(receive, state)
+    return new_actor(receive, state, lindas[math.random(#lindas)])
   end
 
   function system.robust_actor(receive, state, on_err)
@@ -73,6 +77,7 @@ function Actors.system(num_threads, libs)
     local linda = lanes.linda()
     lindas[i] = linda
     actor_lanes[i](linda)
+    pingers[i] = new_actor(receive, {}, linda)
   end
 
   return system

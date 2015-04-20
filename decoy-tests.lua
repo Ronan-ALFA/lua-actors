@@ -33,9 +33,48 @@ describe("decoys",function()
 
     assert.are.equal(decoys.original({}),nil)
   end)
+  it("should know what is a decoy and what isn't", function()
+    assert.are.equal(true, decoys.is(decoy))
+    assert.are.equal(false, decoys.is({}))
+  end)
   it("should roll forward changes", function()
-    decoys.roll_forward(decoy)
+    decoys.commit(decoy)
     assert.are.same(result, orig)
     assert.are.same(result, decoy)
+  end)
+  it("should continue to function after comitting", function()
+    assert.are.equal(true, decoys.is(decoy))
+    decoy.d = 3
+    assert.are.equal(3, decoy.d)
+    assert.are.equal(nil, orig.d)
+    decoys.commit(decoy)
+    assert.are.equal(3, orig.d)
+  end)
+end)
+
+describe("Transactions", function()
+  local o1 = {}
+  local o2 = { a = 1 }
+  local r1 = { a = 1 }
+  local r2 = { a = 2 }
+  it("should commit successfully", function()
+    local res = decoys.transact({o1,o2}, function(d1,d2)
+      d1.a = 1
+      d2.a = 2
+    end)
+    assert.are.same(o1,r1)
+    assert.are.same(o2,r2)
+    assert.are.same({o1,o2},res)
+  end)
+  it("should rollback errors", function()
+    local res, err = decoys.transact({o1,o2}, function(d1,d2)
+      d1.a = nil
+      d2.a = 1
+      error("err")
+    end)
+    assert.are.same(o1,r1)
+    assert.are.same(o2,r2)
+    assert.are.same({o1,o2},res)
+    assert.are.same("decoy-tests.lua:73: err",err)
   end)
 end)

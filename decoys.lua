@@ -1,12 +1,11 @@
 local Decoys = {}
 
 local datas = {}
-local weak = { __mode = "k" }
+local weak = { __mode = "k", __metatable = false }
 setmetatable(datas, weak)
 
-local function is_decoy(table)
-  local mt = getmetatable(table)
-  return mt.index == index
+function Decoys.is(table)
+  return datas[table] ~= nil
 end
 
 local function newindex(orig)
@@ -33,7 +32,7 @@ end
 
 function Decoys.new(orig)
   local decoy = {}
-  setmetatable(decoy, { __index = index(orig), __newindex = newindex(orig) })
+  setmetatable(decoy, { __index = index(orig), __newindex = newindex(orig), __metatable = false })
   datas[decoy] = { orig = orig, set_keys = {} }
 
   return decoy
@@ -47,19 +46,51 @@ function Decoys.original(decoy)
   return nil
 end
 
-function Decoys.roll_forward(decoy)
-  setmetatable(decoy, {})
+function Decoys.commit(decoy)
   local data = datas[decoy]
+  if not data then
+    return nil
+  end
+
   local orig = data.orig
-  if not orig then
+  for k,v in pairs(data.set_keys) do
+    orig[k] = decoy[k]
+    data.set_keys[k] = nil
+    decoy[k] = nil
+  end
+
+  return orig
+end
+
+function Decoys.rollback(decoy)
+  local data = datas[decoy]
+  if not data then
     return nil
   end
 
   for k,v in pairs(data.set_keys) do
-    orig[k] = decoy[k]
+    data.set_keys[k] = nil
+    decoy[k] = nil
+  end
+end
+
+function Decoys.transact(tables, tx)
+  local new_decoys = {}
+  for i,v in ipairs(tables) do
+    new_decoys[i] = Decoys.new(v)
   end
 
-  return orig
+  local res, err = pcall(function() tx(unpack(new_decoys)) end)
+  if res then
+    for i,v in ipairs(new_decoys) do
+      Decoys.commit(new_decoys[i])
+    end
+  else
+    for i,v in ipairs(new_decoys) do
+      Decoys.rollback(new_decoys[i])      
+    end
+  end
+  return tables, err
 end
 
 return Decoys
